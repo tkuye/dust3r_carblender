@@ -9,3 +9,4 @@ trimesh
 tensorboard
 pyglet<2
 pyexr
+huggingface-hub[torch]>=0.22
