@@ -4,7 +4,7 @@
 # --------------------------------------------------------
 # Initialization functions for global alignment
 # --------------------------------------------------------
-from functools import cache
+from functools import lru_cache as cache
 
 import numpy as np
 import scipy.sparse as sp
@@ -77,7 +77,7 @@ def init_minimum_spanning_tree(self, **kw):
 
 
 def init_from_pts3d(self, pts3d, im_focals, im_poses):
-    # init poses
+    # init posesx
     nkp, known_poses_msk, known_poses = get_known_poses(self)
     if nkp == 1:
         raise NotImplementedError("Would be simpler to just align everything afterwards on the single known pose")
@@ -235,7 +235,7 @@ def estimate_focal(pts3d_i, pp=None):
     return float(focal)
 
 
-@cache
+@cache(maxsize=None)
 def pixel_grid(H, W):
     return np.mgrid[:W, :H].T.astype(np.float32)
 

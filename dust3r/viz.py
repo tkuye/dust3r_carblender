@@ -216,7 +216,9 @@ def add_scene_cam(scene, pose_c2w, edge_color, image=None, focal=None, imsize=No
     rot45[2, 3] = -height  # set the tip of the cone = optical center
     aspect_ratio = np.eye(4)
     aspect_ratio[0, 0] = W/H
-    transform = pose_c2w @ OPENGL @ aspect_ratio @ rot45
+    transform = pose_c2w @ aspect_ratio @ rot45
+    print('transform', transform, 'pose_c2w', pose_c2w, 'aspect_ratio', aspect_ratio, 'rot45', rot45)
+    print('focal', focal, 'screen_width', screen_width, 'height', height, 'width', width)
     cam = trimesh.creation.cone(width, height, sections=4)  # , transform=transform)
 
     # this is the image

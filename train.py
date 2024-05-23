@@ -21,7 +21,7 @@ import math
 from collections import defaultdict
 from pathlib import Path
 from typing import Sized
-
+import gc
 import torch
 import torch.backends.cudnn as cudnn
 from torch.utils.tensorboard import SummaryWriter
@@ -104,7 +104,8 @@ def main(args):
 
     print('job dir: {}'.format(os.path.dirname(os.path.realpath(__file__))))
     print("{}".format(args).replace(', ', ',\n'))
-
+    
+    
     device = "cuda" if torch.cuda.is_available() else "cpu"
     device = torch.device(device)
 
@@ -112,7 +113,6 @@ def main(args):
     seed = args.seed + misc.get_rank()
     torch.manual_seed(seed)
     np.random.seed(seed)
-
     cudnn.benchmark = True
 
     # training dataset and loader
@@ -288,6 +288,7 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module,
     optimizer.zero_grad()
 
     for data_iter_step, batch in enumerate(metric_logger.log_every(data_loader, args.print_freq, header)):
+        
         epoch_f = epoch + data_iter_step / len(data_loader)
 
         # we use a per iteration (instead of per epoch) lr scheduler
@@ -297,6 +298,7 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module,
         loss_tuple = loss_of_one_batch(batch, model, criterion, device,
                                        symmetrize_batch=True,
                                        use_amp=bool(args.amp), ret='loss')
+        
         loss, loss_details = loss_tuple  # criterion returns two values
         loss_value = float(loss)
 
@@ -312,12 +314,14 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module,
 
         del loss
         del batch
+        gc.collect()
+        torch.cuda.empty_cache()
 
         lr = optimizer.param_groups[0]["lr"]
         metric_logger.update(epoch=epoch_f)
         metric_logger.update(lr=lr)
         metric_logger.update(loss=loss_value, **loss_details)
-
+        
         if (data_iter_step + 1) % accum_iter == 0 and ((data_iter_step + 1) % (accum_iter * args.print_freq)) == 0:
             loss_value_reduce = misc.all_reduce_mean(loss_value)  # MUST BE EXECUTED BY ALL NODES
             if log_writer is None:

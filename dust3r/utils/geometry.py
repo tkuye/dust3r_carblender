@@ -7,7 +7,7 @@
 import torch
 import numpy as np
 from scipy.spatial import cKDTree as KDTree
-
+import math
 from dust3r.utils.misc import invalid_to_zeros, invalid_to_nans
 from dust3r.utils.device import to_numpy
 
@@ -196,6 +196,40 @@ def depthmap_to_camera_coordinates(depthmap, camera_intrinsics, pseudo_focal=Non
     valid_mask = (depthmap > 0.0)
     return X_cam, valid_mask
 
+def depthmap_to_camera_coordinates_v2(depth, angle_x, clip_start=1e-1, clip_end=1e3, **_):
+    """
+    Args:
+        - depthmap (HxW array):
+        - camera_intrinsics: a 3x3 matrix
+    Returns:
+        pointmap of absolute coordinates (HxWx3 array), and a mask specifying valid pixels.
+    """
+    if isinstance(angle_x, np.ndarray):
+        angle_x = angle_x.item()
+    
+    if isinstance(clip_start, np.ndarray):
+        clip_start = clip_start.item()
+    
+    if isinstance(clip_end, np.ndarray):
+        clip_end = clip_end.item()
+        
+    factor = 2.0 * math.tan(angle_x/2.0)
+    
+    rows, cols = depth.shape
+    c, r = np.meshgrid(np.arange(cols), np.arange(rows), sparse=True)
+    # Valid depths are defined by the camera clipping planes
+    valid = (depth > clip_start) & (depth < clip_end)
+    
+    # Negate Z (the camera Z is at the opposite)
+    z = -np.where(valid, depth, 0.0)
+    # Mirror X
+    # Center c and r relatively to the image size cols and rows
+    ratio = max(rows,cols)
+    x = -np.where(valid, factor * z * (c - (cols / 2)) / ratio, 0)
+    y = np.where(valid, factor * z * (r - (rows / 2)) / ratio, 0)
+    X_cam = np.stack((x, y, z), axis=-1).astype(np.float32)
+    return X_cam, valid
+
 
 def depthmap_to_absolute_camera_coordinates(depthmap, camera_intrinsics, camera_pose, **kw):
     """
@@ -205,7 +239,10 @@ def depthmap_to_absolute_camera_coordinates(depthmap, camera_intrinsics, camera_
         - camera_pose: a 4x3 or 4x4 cam2world matrix
     Returns:
         pointmap of absolute coordinates (HxWx3 array), and a mask specifying valid pixels."""
-    X_cam, valid_mask = depthmap_to_camera_coordinates(depthmap, camera_intrinsics)
+    if kw.get('v2', False):
+        X_cam, valid_mask = depthmap_to_camera_coordinates_v2(depthmap, **kw)
+    else:
+        X_cam, valid_mask = depthmap_to_camera_coordinates(depthmap, camera_intrinsics)
 
     # R_cam2world = np.float32(camera_params["R_cam2world"])
     # t_cam2world = np.float32(camera_params["t_cam2world"]).squeeze()

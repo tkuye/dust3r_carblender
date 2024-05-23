@@ -66,7 +66,7 @@ class MulDataset (EasyDataset):
         return self.dataset._resolutions
 
 
-class ResizedDataset (EasyDataset):
+class ResizedDataset(EasyDataset):
     """ Artifically changing the size of a dataset.
     """
     new_size: int

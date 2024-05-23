@@ -82,7 +82,7 @@ class BaseStereoViewDataset (EasyDataset):
 
         # check data-types
         for v, view in enumerate(views):
-            assert 'pts3d' not in view, f"pts3d should not be there, they will be computed afterwards based on intrinsics+depthmap for view {view_name(view)}"
+            #assert 'pts3d' not in view, f"pts3d should not be there, they will be computed afterwards based on intrinsics+depthmap for view {view_name(view)}"
             view['idx'] = (idx, ar_idx, v)
 
             # encode the image
@@ -95,13 +95,16 @@ class BaseStereoViewDataset (EasyDataset):
                 view['camera_pose'] = np.full((4, 4), np.nan, dtype=np.float32)
             else:
                 assert np.isfinite(view['camera_pose']).all(), f'NaN in camera pose for view {view_name(view)}'
-            assert 'pts3d' not in view
+            #assert 'pts3d' not in view
             assert 'valid_mask' not in view
             assert np.isfinite(view['depthmap']).all(), f'NaN in depthmap for view {view_name(view)}'
             pts3d, valid_mask = depthmap_to_absolute_camera_coordinates(**view)
 
-            view['pts3d'] = pts3d
-            view['valid_mask'] = valid_mask & np.isfinite(pts3d).all(axis=-1)
+            if not 'pts3d' in view:
+                view['pts3d'] = pts3d
+                view['valid_mask'] = valid_mask & np.isfinite(pts3d).all(axis=-1)
+            else:
+                view['valid_mask'] = valid_mask & np.isfinite(view['pts3d']).all(axis=-1)
 
             # check all datatypes
             for key, val in view.items():
@@ -134,7 +137,7 @@ class BaseStereoViewDataset (EasyDataset):
             assert width >= height
             self._resolutions.append((width, height))
 
-    def _crop_resize_if_necessary(self, image, depthmap, intrinsics, resolution, rng=None, info=None):
+    def _crop_resize_if_necessary(self, image, depthmap, intrinsics, resolution, rng=None, info=None, pointmap=None):
         """ This function:
             - first downsizes the image with LANCZOS inteprolation,
               which is better than bilinear interpolation in
@@ -155,7 +158,8 @@ class BaseStereoViewDataset (EasyDataset):
         r, b = cx + min_margin_x, cy + min_margin_y
         crop_bbox = (l, t, r, b)
         image, depthmap, intrinsics = cropping.crop_image_depthmap(image, depthmap, intrinsics, crop_bbox)
-
+        if pointmap is not None:
+            pointmap = cropping.crop_pointmap(pointmap, crop_bbox)
         # transpose the resolution if necessary
         W, H = image.size  # new size
         assert resolution[0] >= resolution[1]
@@ -172,13 +176,18 @@ class BaseStereoViewDataset (EasyDataset):
         if self.aug_crop > 1:
             target_resolution += rng.integers(0, self.aug_crop)
         image, depthmap, intrinsics = cropping.rescale_image_depthmap(image, depthmap, intrinsics, target_resolution)
+        if pointmap is not None:
+            pointmap = cropping.rescale_pointmap(pointmap, target_resolution)
 
         # actual cropping (if necessary) with bilinear interpolation
         intrinsics2 = cropping.camera_matrix_of_crop(intrinsics, image.size, resolution, offset_factor=0.5)
         crop_bbox = cropping.bbox_from_intrinsics_in_out(intrinsics, intrinsics2, resolution)
         image, depthmap, intrinsics2 = cropping.crop_image_depthmap(image, depthmap, intrinsics, crop_bbox)
+        if pointmap is not None:
+            pointmap = cropping.crop_pointmap(pointmap, crop_bbox)
+            
 
-        return image, depthmap, intrinsics2
+        return image, depthmap, intrinsics2, pointmap
 
 
 def is_good_type(key, v):

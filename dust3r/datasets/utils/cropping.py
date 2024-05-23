@@ -78,6 +78,27 @@ def rescale_image_depthmap(image, depthmap, camera_intrinsics, output_resolution
 
     return image.to_pil(), depthmap, camera_intrinsics
 
+def rescale_pointmap(pointmap, output_resolution):
+    """ Jointly rescale a (image, depthmap) 
+        so that (out_width, out_height) >= output_res
+    """
+    ## pointmap shape is (H,W,3) for XYZ
+    input_resolution = pointmap.shape[:2][::-1]
+    input_resolution = np.array(input_resolution).astype(int)
+    
+    output_resolution = np.array(output_resolution).astype(int)
+    assert output_resolution.shape == (2,)
+    # define output resolution
+    scale_final = max(output_resolution / input_resolution) + 1e-8
+    
+    output_resolution = np.floor(input_resolution * scale_final).astype(int)
+    
+    # first rescale the image so that it contains the crop
+    pointmap = cv2.resize(pointmap, output_resolution, fx=scale_final,
+                          fy=scale_final, interpolation=cv2.INTER_NEAREST)
+    
+    return pointmap
+
 
 def camera_matrix_of_crop(input_camera_matrix, input_resolution, output_resolution, scaling=1, offset_factor=0.5, offset=None):
     # Margins to offset the origin
@@ -110,6 +131,15 @@ def crop_image_depthmap(image, depthmap, camera_intrinsics, crop_bbox):
     camera_intrinsics[1, 2] -= t
 
     return image.to_pil(), depthmap, camera_intrinsics
+
+def crop_pointmap(pointmap, crop_bbox):
+    """
+    Return a crop of the input view.
+    """
+    l, t, r, b = crop_bbox
+    pointmap = pointmap[t:b, l:r]
+
+    return pointmap
 
 
 def bbox_from_intrinsics_in_out(input_camera_matrix, output_camera_matrix, output_resolution):
