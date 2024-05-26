@@ -30,12 +30,13 @@ torch.backends.cuda.matmul.allow_tf32 = True  # for gpu >= Ampere and pytorch >=
 from dust3r.model import AsymmetricCroCo3DStereo, inf  # noqa: F401, needed when loading the model
 from dust3r.datasets import get_data_loader  # noqa
 from dust3r.losses import *  # noqa: F401, needed when loading the model
-from dust3r.inference import loss_of_one_batch  # noqa
-
+from dust3r.inference import loss_of_one_batch, get_pred_pts3d  # noqa
+import mlflow 
 import dust3r.utils.path_to_croco  # noqa: F401
 import croco.utils.misc as misc  # noqa
 from croco.utils.misc import NativeScalerWithGradNormCount as NativeScaler  # noqa
-
+from PIL import Image
+mlflow.autolog()
 
 def get_args_parser():
     parser = argparse.ArgumentParser('DUST3R training', add_help=False)
@@ -295,17 +296,20 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module,
         if data_iter_step % accum_iter == 0:
             misc.adjust_learning_rate(optimizer, epoch_f, args)
 
-        loss_tuple = loss_of_one_batch(batch, model, criterion, device,
+        results = loss_of_one_batch(batch, model, criterion, device,
                                        symmetrize_batch=True,
-                                       use_amp=bool(args.amp), ret='loss')
-        
+                                       use_amp=bool(args.amp))
+        loss_tuple = results['loss']
         loss, loss_details = loss_tuple  # criterion returns two values
         loss_value = float(loss)
+        
+        pred1, pred2 = results['pred1'], results['pred2']
+        
 
         if not math.isfinite(loss_value):
             print("Loss is {}, stopping training".format(loss_value), force=True)
             sys.exit(1)
-
+            
         loss /= accum_iter
         loss_scaler(loss, optimizer, parameters=model.parameters(),
                     update_grad=(data_iter_step + 1) % accum_iter == 0)
@@ -318,6 +322,7 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module,
         torch.cuda.empty_cache()
 
         lr = optimizer.param_groups[0]["lr"]
+        
         metric_logger.update(epoch=epoch_f)
         metric_logger.update(lr=lr)
         metric_logger.update(loss=loss_value, **loss_details)
@@ -331,10 +336,60 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module,
             """
             epoch_1000x = int(epoch_f * 1000)
             log_writer.add_scalar('train_loss', loss_value_reduce, epoch_1000x)
+            mlflow.log_metric('train_loss', loss_value_reduce, step=epoch_1000x)
             log_writer.add_scalar('train_lr', lr, epoch_1000x)
+            mlflow.log_metric('train_lr', lr, step=epoch_1000x)
             log_writer.add_scalar('train_iter', epoch_1000x, epoch_1000x)
+            mlflow.log_metric('train_iter', epoch_1000x, step=epoch_1000x)
             for name, val in loss_details.items():
                 log_writer.add_scalar('train_'+name, val, epoch_1000x)
+                mlflow.log_metric('train_'+name, val, step=epoch_1000x)
+            
+            gt1 = results['view1']
+            gt2 = results['view2']
+            pr_pts1 = get_pred_pts3d(gt1, pred1, use_pose=False)
+            pr_pts2 = get_pred_pts3d(gt2, pred2, use_pose=True)
+            gt_pts1 = gt1['pts3d']
+            gt_pts2 = gt2['pts3d']
+            if isinstance(pr_pts1, torch.Tensor):
+                pr_pts1 = pr_pts1.cpu().numpy()
+                pr_pts2 = pr_pts2.cpu().numpy()
+            if isinstance(gt_pts1, torch.Tensor):
+                gt_pts1 = gt_pts1.cpu().numpy()
+                gt_pts2 = gt_pts2.cpu().numpy()
+            
+            ## convert to PIL image, current shape is HxWxC
+            ## normalize to 0-255
+            pr_pts1 = (pr_pts1 - pr_pts1.min()) / (pr_pts1.max() - pr_pts1.min()) * 255
+            pr_pts2 = (pr_pts2 - pr_pts2.min()) / (pr_pts2.max() - pr_pts2.min()) * 255
+            gt_pts1 = (gt_pts1 - gt_pts1.min()) / (gt_pts1.max() - gt_pts1.min()) * 255
+            gt_pts2 = (gt_pts2 - gt_pts2.min()) / (gt_pts2.max() - gt_pts2.min()) * 255
+            
+            pr_pts1 = pr_pts1.astype(np.uint8)
+            pr_pts2 = pr_pts2.astype(np.uint8)
+            gt_pts1 = gt_pts1.astype(np.uint8)
+            gt_pts2 = gt_pts2.astype(np.uint8)
+            
+            pr_pts1 = Image.fromarray(pr_pts1)
+            pr_pts2 = Image.fromarray(pr_pts2)
+            gt_pts1 = Image.fromarray(gt_pts1)
+            gt_pts2 = Image.fromarray(gt_pts2)
+            
+            pts1 = Image.new('RGB', (pr_pts1.width + gt_pts1.width, pr_pts1.height))
+            pts1.paste(pr_pts1, (0, 0))
+            pts1.paste(gt_pts1, (pr_pts1.width, 0))
+            
+            pts2 = Image.new('RGB', (pr_pts2.width + gt_pts2.width, pr_pts2.height))
+            pts2.paste(pr_pts2, (0, 0))
+            pts2.paste(gt_pts2, (pr_pts2.width, 0))
+            
+            log_writer.add_image('train_pts1', pts1, epoch_1000x)
+            log_writer.add_image('train_pts2', pts2, epoch_1000x)
+            
+            mlflow.log_image(pr_pts1, key='train_pts1', step=epoch_1000x)
+            mlflow.log_image(pr_pts2, key='train_pts2', step=epoch_1000x)
+            
+
 
     # gather the stats from all processes
     metric_logger.synchronize_between_processes()
@@ -376,8 +431,9 @@ def test_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module,
 
     if log_writer is not None:
         for name, val in results.items():
+            mlflow.log_metric(prefix+'_'+name, val, step=1000*epoch)
             log_writer.add_scalar(prefix+'_'+name, val, 1000*epoch)
-
+            
     return results
 
 

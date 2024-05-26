@@ -185,6 +185,7 @@ if __name__ == "__main__":
         cam_size = max(auto_cam_size(poses), 0.001)
         for view_idx in [0, 1]:
             pts3d = views[view_idx]['pts3d']
+            
             valid_mask = views[view_idx]['valid_mask']
             colors = rgb(views[view_idx]['img'])
             viz.add_pointcloud(pts3d, colors, valid_mask)
