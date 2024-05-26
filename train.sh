@@ -19,5 +19,5 @@ torchrun --nproc_per_node 1 train.py \
     --model="AsymmetricCroCo3DStereo(pos_embed='RoPE100', patch_embed_cls='ManyAR_PatchEmbed', img_size=(640, 640), head_type='dpt', output_mode='pts3d', depth_mode=('exp', -inf, inf), conf_mode=('exp', 1, inf), enc_embed_dim=1024, enc_depth=24, enc_num_heads=16, dec_embed_dim=768, dec_depth=12, dec_num_heads=12)" \
     --pretrained="checkpoints/pretrained/DUSt3R_ViTLarge_BaseDecoder_512_linear.pth" \
     --lr=0.0001 --min_lr=1e-06 --warmup_epochs=1 --epochs=10 --batch_size=2 --accum_iter=4 \
-    --save_freq=5 --keep_freq=10 --eval_freq=1 --print_freq=10 --amp 1 \
+    --save_freq=5 --keep_freq=10 --eval_freq=1 --print_freq=10 \
     --output_dir="checkpoints/dust3r_carblender640dpt" 

@@ -10,3 +10,5 @@ tensorboard
 pyglet<2
 pyexr
 huggingface-hub[torch]>=0.22
+azureml-core
+azureml-mlflow

@@ -115,12 +115,7 @@ def load_images(folder_or_list, size, square_ok=False, verbose=True):
         imgs.append(dict(img=ImgNorm(img)[None], true_shape=np.int32(
             [img.size[::-1]]), idx=len(imgs), instance=str(len(imgs))))
 
-<<<<<<< HEAD
-    assert imgs, 'no images found at '+root
-    print(f' (Found {len(imgs)} images)')
-=======
     assert imgs, 'no images foud at '+root
     if verbose:
         print(f' (Found {len(imgs)} images)')
->>>>>>> refs/remotes/origin/main
     return imgs
