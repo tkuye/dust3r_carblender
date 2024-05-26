@@ -250,7 +250,6 @@ def save_final_model(args, epoch, model_without_ddp, best_so_far=None):
     print(f'>> Saving model to {checkpoint_path} ...')
     misc.save_on_master(to_save, checkpoint_path)
 
-
 def build_dataset(dataset, batch_size, num_workers, test=False):
     split = ['Train', 'Test'][test]
     print(f'Building {split} Data loader for dataset: ', dataset)
@@ -352,28 +351,29 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module,
             gt_pts1 = gt1['pts3d']
             gt_pts2 = gt2['pts3d']
             if isinstance(pr_pts1, torch.Tensor):
-                pr_pts1 = pr_pts1.cpu().numpy()
-                pr_pts2 = pr_pts2.cpu().numpy()
+                pr_pts1 = pr_pts1.detach().cpu().numpy()
+                pr_pts2 = pr_pts2.detach().cpu().numpy()
             if isinstance(gt_pts1, torch.Tensor):
-                gt_pts1 = gt_pts1.cpu().numpy()
-                gt_pts2 = gt_pts2.cpu().numpy()
+                gt_pts1 = gt_pts1.detach().cpu().numpy()
+                gt_pts2 = gt_pts2.detach().cpu().numpy()
             
             ## convert to PIL image, current shape is HxWxC
             ## normalize to 0-255
-            pr_pts1 = (pr_pts1 - pr_pts1.min()) / (pr_pts1.max() - pr_pts1.min()) * 255
-            pr_pts2 = (pr_pts2 - pr_pts2.min()) / (pr_pts2.max() - pr_pts2.min()) * 255
-            gt_pts1 = (gt_pts1 - gt_pts1.min()) / (gt_pts1.max() - gt_pts1.min()) * 255
-            gt_pts2 = (gt_pts2 - gt_pts2.min()) / (gt_pts2.max() - gt_pts2.min()) * 255
+            pr_pts1 = (pr_pts1 - pr_pts1.min()) / (pr_pts1.max() - pr_pts1.min())
+            pr_pts2 = (pr_pts2 - pr_pts2.min()) / (pr_pts2.max() - pr_pts2.min())
+            gt_pts1 = (gt_pts1 - gt_pts1.min()) / (gt_pts1.max() - gt_pts1.min())
+            gt_pts2 = (gt_pts2 - gt_pts2.min()) / (gt_pts2.max() - gt_pts2.min())
             
-            pr_pts1 = pr_pts1.astype(np.uint8)
-            pr_pts2 = pr_pts2.astype(np.uint8)
-            gt_pts1 = gt_pts1.astype(np.uint8)
-            gt_pts2 = gt_pts2.astype(np.uint8)
-            
-            pr_pts1 = Image.fromarray(pr_pts1)
-            pr_pts2 = Image.fromarray(pr_pts2)
-            gt_pts1 = Image.fromarray(gt_pts1)
-            gt_pts2 = Image.fromarray(gt_pts2)
+            pr_pts1 = (pr_pts1 * 255.0).astype(np.uint8)
+            pr_pts2 = (pr_pts2 * 255.0).astype(np.uint8)
+            gt_pts1 = (gt_pts1 * 255.0).astype(np.uint8)
+            gt_pts2 = (gt_pts2 * 255.0).astype(np.uint8)
+
+
+            pr_pts1 = Image.fromarray(pr_pts1[0])
+            pr_pts2 = Image.fromarray(pr_pts2[0])
+            gt_pts1 = Image.fromarray(gt_pts1[0])
+            gt_pts2 = Image.fromarray(gt_pts2[0])
             
             pts1 = Image.new('RGB', (pr_pts1.width + gt_pts1.width, pr_pts1.height))
             pts1.paste(pr_pts1, (0, 0))
@@ -383,8 +383,8 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module,
             pts2.paste(pr_pts2, (0, 0))
             pts2.paste(gt_pts2, (pr_pts2.width, 0))
             
-            log_writer.add_image('train_pts1', pts1, epoch_1000x)
-            log_writer.add_image('train_pts2', pts2, epoch_1000x)
+            log_writer.add_image('train_pts1', np.array(pts1), epoch_1000x, dataformats='HWC')
+            log_writer.add_image('train_pts2', np.array(pts2), epoch_1000x, dataformats='HWC')
             
             mlflow.log_image(pr_pts1, key='train_pts1', step=epoch_1000x)
             mlflow.log_image(pr_pts2, key='train_pts2', step=epoch_1000x)

@@ -12,12 +12,12 @@ fi
 # (640, 480), (640, 416), (640, 352), (640, 320), (640, 192)
 
 torchrun --nproc_per_node 1 train.py \
-    --train_dataset="666_760 @ Carblender(ROOT='/home/azureuser/cloudfiles/code/Users/tosin/blender_data/data', resolution=[(640, 480), (640, 416), (640, 352), (640, 320), (640, 192)], aug_crop=16, transform=ColorJitter, split='train')" \
-    --test_dataset="74_085 @ Carblender(ROOT='/home/azureuser/cloudfiles/code/Users/tosin/blender_data/data', resolution=(640, 480), split='val')" \
+    --train_dataset="100 @ Carblender(ROOT='/home/azureuser/cloudfiles/code/Users/tosin/blender_data/data', resolution=(512, 384), aug_crop=16, transform=ColorJitter, split='train')" \
+    --test_dataset="10 @ Carblender(ROOT='/home/azureuser/cloudfiles/code/Users/tosin/blender_data/data', resolution=(512, 384), split='val')" \
     --train_criterion="ConfLoss(Regr3D(L21, norm_mode='avg_dis'), alpha=0.2)" \
     --test_criterion="Regr3D_ScaleShiftInv(L21, gt_scale=True)" \
-    --model="AsymmetricCroCo3DStereo(pos_embed='RoPE100', patch_embed_cls='ManyAR_PatchEmbed', img_size=(640, 640), head_type='dpt', output_mode='pts3d', depth_mode=('exp', -inf, inf), conf_mode=('exp', 1, inf), enc_embed_dim=1024, enc_depth=24, enc_num_heads=16, dec_embed_dim=768, dec_depth=12, dec_num_heads=12)" \
-    --pretrained="checkpoints/pretrained/DUSt3R_ViTLarge_BaseDecoder_512_linear.pth" \
-    --lr=0.0001 --min_lr=1e-06 --warmup_epochs=1 --epochs=10 --batch_size=2 --accum_iter=4 \
-    --save_freq=5 --keep_freq=10 --eval_freq=1 --print_freq=10 \
-    --output_dir="checkpoints/dust3r_carblender640dpt" 
+    --model="AsymmetricCroCo3DStereo(pos_embed='RoPE100', patch_embed_cls='ManyAR_PatchEmbed', img_size=(512, 512), head_type='dpt', output_mode='pts3d', depth_mode=('exp', -inf, inf), conf_mode=('exp', 1, inf), enc_embed_dim=1024, enc_depth=24, enc_num_heads=16, dec_embed_dim=768, dec_depth=12, dec_num_heads=12)" \
+    --pretrained="checkpoints/DUSt3R_ViTLarge_BaseDecoder_512_linear.pth" \
+    --lr=0.0001 --min_lr=1e-06 --warmup_epochs=0 --epochs=5 --batch_size=2 --accum_iter=4 \
+    --save_freq=1 --keep_freq=10 --eval_freq=1 --print_freq=2 \
+    --output_dir="checkpoints/test_dust3r"
